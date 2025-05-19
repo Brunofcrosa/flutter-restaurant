@@ -11,8 +11,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> _comanda = [];
-  final TextEditingController _itemController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
 
   @override
   void initState() {
@@ -28,29 +26,63 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _adicionarItem() async {
-    final nome = _itemController.text.trim();
-    final preco = _priceController.text.trim();
+  void _abrirModalAdicionarItem() {
+    final TextEditingController nomeController = TextEditingController();
+    final TextEditingController precoController = TextEditingController();
 
-    if (nome.isNotEmpty && preco.isNotEmpty) {
-      try {
-        await _dbHelper.insertItem({
-          'nome': nome,
-          'valor': double.parse(preco),
-          'quantidade': 1,
-        });
-        
-        _itemController.clear();
-        _priceController.clear();
-        FocusScope.of(context).unfocus();
-        await _carregarItens();
-        
-      } catch (e) {
-        _showError('Erro ao adicionar: ${e.toString()}');
-      }
-    } else {
-      _showError('Preencha nome e preço!');
-    }
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Novo Item'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nomeController,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Nome do Item'),
+              ),
+              TextField(
+                controller: precoController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Preço (R\$)'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: Navigator.of(context).pop,
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final nome = nomeController.text.trim();
+              final preco = precoController.text.trim();
+
+              if (nome.isNotEmpty && preco.isNotEmpty) {
+                try {
+                  await _dbHelper.insertItem({
+                    'nome': nome,
+                    'valor': double.parse(preco),
+                    'quantidade': 1,
+                  });
+
+                  Navigator.pop(context);
+                  await _carregarItens();
+                } catch (e) {
+                  _showError('Erro ao adicionar: $e');
+                }
+              } else {
+                _showError('Preencha todos os campos.');
+              }
+            },
+            child: const Text('Adicionar'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _editarItem(int index) {
@@ -100,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context);
                 await _carregarItens();
               } catch (e) {
-                _showError('Erro ao editar: ${e.toString()}');
+                _showError('Erro ao editar: $e');
               }
             },
             child: const Text('Salvar'),
@@ -139,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await _dbHelper.deleteItem(_comanda[index]['id']);
       await _carregarItens();
     } catch (e) {
-      _showError('Erro ao excluir: ${e.toString()}');
+      _showError('Erro ao excluir: $e');
     }
   }
 
@@ -164,117 +196,56 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Comanda Digital'),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person),
-            onPressed: () => Navigator.pushNamed(context, '/profile'),
-          ),
-        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Formulário para adicionar itens
-            Card(
-              elevation: 3,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _itemController,
-                      decoration: const InputDecoration(
-                        labelText: 'Nome do Item',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _priceController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Preço (R\$)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    ElevatedButton(
-                      onPressed: _adicionarItem,
-                      child: const Text('Adicionar à Comanda'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // Lista de itens e total
             Expanded(
-              child: Column(
-                children: [
-                  const Text(
-                    'ITENS DA COMANDA',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const Divider(),
-                  Expanded(
-                    child: _comanda.isEmpty
-                        ? const Center(child: Text('Nenhum item na comanda'))
-                        : ListView.builder(
-                            itemCount: _comanda.length,
-                            itemBuilder: (context, index) {
-                              final item = _comanda[index];
-                              return Card(
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                child: ListTile(
-                                  title: Text(item['nome']),
-                                  subtitle: Text(
-                                    '${item['quantidade']} x R\$${item['valor'].toStringAsFixed(2)}',
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.edit, color: Colors.blue),
-                                        onPressed: () => _editarItem(index),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete, color: Colors.red),
-                                        onPressed: () => _confirmarExcluirItem(index),
-                                      ),
-                                    ],
-                                  ),
+              child: _comanda.isEmpty
+                  ? const Center(child: Text('Nenhum item na comanda'))
+                  : ListView.builder(
+                      itemCount: _comanda.length,
+                      itemBuilder: (context, index) {
+                        final item = _comanda[index];
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          child: ListTile(
+                            title: Text(item['nome']),
+                            subtitle: Text('${item['quantidade']} x R\$${item['valor'].toStringAsFixed(2)}'),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: Colors.blue),
+                                  onPressed: () => _editarItem(index),
                                 ),
-                              );
-                            },
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () => _confirmarExcluirItem(index),
+                                ),
+                              ],
+                            ),
                           ),
-                  ),
-                  const Divider(),
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      'TOTAL: R\$${_calcularTotal().toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                        );
+                      },
                     ),
-                  ),
-                ],
+            ),
+            const Divider(),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'TOTAL: R\$${_calcularTotal().toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
             ),
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _abrirModalAdicionarItem,
+        child: const Icon(Icons.add),
+      ),
     );
-  }
-
-  @override
-  void dispose() {
-    _itemController.dispose();
-    _priceController.dispose();
-    super.dispose();
   }
 }

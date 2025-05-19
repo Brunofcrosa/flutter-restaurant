@@ -28,14 +28,6 @@ class DatabaseHelper {
 
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cpf TEXT NOT NULL UNIQUE,
-        password TEXT NOT NULL
-      )
-    ''');
-
-    await db.execute('''
       CREATE TABLE itens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nome TEXT NOT NULL,
@@ -45,13 +37,7 @@ class DatabaseHelper {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     ''');
-
-    // Dados iniciais para teste
-    await db.insert('users', {
-      'cpf': '12345678900',
-      'password': '123456',
-    });
-  }
+  } 
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
@@ -59,18 +45,6 @@ class DatabaseHelper {
     }
   }
 
-  // Métodos para Usuários
-  Future<bool> login(String cpf, String password) async {
-    final db = await database;
-    final result = await db.query(
-      'users',
-      where: 'cpf = ? AND password = ?',
-      whereArgs: [cpf, password],
-    );
-    return result.isNotEmpty;
-  }
-
-  // Métodos para Itens da Comanda
   Future<int> insertItem(Map<String, dynamic> item) async {
     final db = await database;
     return await db.insert('itens', item);

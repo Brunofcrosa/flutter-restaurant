@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../db/database.dart';
+import '../../services/db/database.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

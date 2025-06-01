@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
-import '../modules/home/home.dart';
+import 'modules/home/tela_inicial.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const MeuApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MeuApp extends StatelessWidget {
+  const MeuApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Meu App',
+      title: 'Minha Comanda',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: const HomeScreen(), // Direto para a tela inicial
+      home: const TelaInicial(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }

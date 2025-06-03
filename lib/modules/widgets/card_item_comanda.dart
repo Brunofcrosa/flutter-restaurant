@@ -1,4 +1,3 @@
-// lib/modules/widgets/card_item_comanda.dart
 import 'package:flutter/material.dart';
 import 'dart:io';
 
@@ -10,7 +9,7 @@ class CardItemComanda extends StatelessWidget {
   final VoidCallback? aoTocar;
 
   const CardItemComanda({
-    super.key,
+    super.key, 
     required this.item,
     required this.aoRemover,
     this.aoTocar,

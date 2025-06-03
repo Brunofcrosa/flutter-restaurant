@@ -1,42 +1,40 @@
-// lib/modules/home/tela_editar_comanda.dart
-import 'package:flutter/material.dart';
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import '../../modules/widgets/card_item_comanda.dart';
-import '../../services/db/banco_dados.dart';
-import '../../services/db/modelo_comanda.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:restaurante/services/db/banco_dados.dart';
+import 'package:restaurante/services/db/modelo_comanda.dart';
+import 'package:uuid/uuid.dart';
 
 class TelaEditarComanda extends StatefulWidget {
   final Comanda comanda;
   final VoidCallback aoSalvar;
 
   const TelaEditarComanda({
-    super.key,
+    super.key, 
     required this.comanda,
     required this.aoSalvar,
   });
 
   @override
-  _TelaEditarComandaState createState() => _TelaEditarComandaState();
+  State<TelaEditarComanda> createState() => _TelaEditarComandaState();
 }
 
 class _TelaEditarComandaState extends State<TelaEditarComanda> {
   late Comanda _comandaSendoEditada;
   final TextEditingController _nomeControle = TextEditingController();
-
   final BancoDados _banco = BancoDados();
-
   bool _estaCarregando = false;
   bool _temMudancas = false;
+  double _total = 0.0;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     _comandaSendoEditada = widget.comanda.copiarCom();
     _nomeControle.text = _comandaSendoEditada.nome;
-
+    _calcularTotal();
     _nomeControle.addListener(_checarMudancas);
   }
 
@@ -48,27 +46,28 @@ class _TelaEditarComandaState extends State<TelaEditarComanda> {
   }
 
   void _checarMudancas() {
+    if (!mounted) return;
+    
     final bool nomeMudou = _nomeControle.text.trim() != widget.comanda.nome;
-    final bool itensMudar = !_compararItens(_comandaSendoEditada.itens, widget.comanda.itens);
+    final bool itensMudaram = !_compararItens(
+      _comandaSendoEditada.itens, 
+      widget.comanda.itens
+    );
 
-    if (!_temMudancas && (nomeMudou || itensMudar)) {
-      setState(() {
-        _temMudancas = true;
-      });
-    } else if (_temMudancas && !nomeMudou && !itensMudar) {
-      setState(() {
-        _temMudancas = false;
-      });
-    }
+    setState(() {
+      _temMudancas = nomeMudou || itensMudaram;
+    });
   }
 
   void _mostrarMensagemErro(String mensagem) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensagem),
-        backgroundColor: Colors.red,
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensagem),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   bool _validarItem(String nome, int? quantidade, double? preco) {
@@ -79,47 +78,16 @@ class _TelaEditarComandaState extends State<TelaEditarComanda> {
         preco >= 0;
   }
 
-  Future<void> _adicionarItem(String nomeItem, int quantidade, double preco, String? caminhoFoto) async {
-    final novoItem = ItemComanda(
-      nome: nomeItem,
-      quantidade: quantidade,
-      preco: preco,
-      caminhoFoto: caminhoFoto,
-    );
-
+  void _removerItem(int index) {
+    if (!mounted) return;
+    
     setState(() {
-      _comandaSendoEditada = _comandaSendoEditada.copiarCom(
-        itens: [..._comandaSendoEditada.itens, novoItem],
-      );
-      _checarMudancas();
-    });
-  }
-
-  Future<void> _editarItem(int index, String nomeItem, int quantidade, double preco, String? caminhoFoto) async {
-    final itemAtualizado = _comandaSendoEditada.itens[index].copiarCom(
-      nome: nomeItem,
-      quantidade: quantidade,
-      preco: preco,
-      caminhoFoto: caminhoFoto,
-    );
-
-    setState(() {
-      final List<ItemComanda> novosItens = List.from(_comandaSendoEditada.itens);
-      novosItens[index] = itemAtualizado;
-      _comandaSendoEditada = _comandaSendoEditada.copiarCom(
-        itens: novosItens,
-      );
-      _checarMudancas();
-    });
-  }
-
-  Future<void> _removerItem(int index) async {
-    setState(() {
-      final List<ItemComanda> novosItens = List.from(_comandaSendoEditada.itens);
+      final novosItens = List<ItemComanda>.from(_comandaSendoEditada.itens);
       novosItens.removeAt(index);
       _comandaSendoEditada = _comandaSendoEditada.copiarCom(
         itens: novosItens,
       );
+      _calcularTotal();
       _checarMudancas();
     });
   }
@@ -139,15 +107,18 @@ class _TelaEditarComandaState extends State<TelaEditarComanda> {
   }
 
   Future<bool> _salvarComanda() async {
-    if (_estaCarregando) return false;
+    if (_isSaving || !mounted) return false;
+    _isSaving = true;
 
     final String nome = _nomeControle.text.trim();
     if (nome.isEmpty) {
       _mostrarMensagemErro('O nome da comanda não pode ser vazio.');
+      _isSaving = false;
       return false;
     }
 
     if (!_temMudancas) {
+      _isSaving = false;
       return true;
     }
 
@@ -158,19 +129,28 @@ class _TelaEditarComandaState extends State<TelaEditarComanda> {
         nome: nome,
         itens: _comandaSendoEditada.itens.map((e) => e.copiarCom()).toList(),
       ));
-      widget.aoSalvar();
 
-      _comandaSendoEditada = _comandaSendoEditada.copiarCom(
-        nome: nome,
-        itens: _comandaSendoEditada.itens.map((e) => e.copiarCom()).toList(),
-      );
-      _temMudancas = false;
+      if (!mounted) return false;
+
+      setState(() {
+        _comandaSendoEditada = _comandaSendoEditada.copiarCom(
+          nome: nome,
+          itens: _comandaSendoEditada.itens.map((e) => e.copiarCom()).toList(),
+        );
+        _temMudancas = false;
+      });
+      
       return true;
     } catch (e) {
-      _mostrarMensagemErro('Erro ao salvar comanda: $e');
+      if (mounted) {
+        _mostrarMensagemErro('Erro ao salvar comanda: $e');
+      }
       return false;
     } finally {
-      setState(() => _estaCarregando = false);
+      if (mounted) {
+        setState(() => _estaCarregando = false);
+      }
+      _isSaving = false;
     }
   }
 
@@ -182,25 +162,33 @@ class _TelaEditarComandaState extends State<TelaEditarComanda> {
     _mostrarModalItem(estaEditando: true, item: item, index: index);
   }
 
-  void _mostrarModalItem({required bool estaEditando, ItemComanda? item, int? index}) {
-    final TextEditingController itemControle = TextEditingController(text: estaEditando ? item!.nome : '');
-    final TextEditingController quantidadeControle = TextEditingController(text: estaEditando ? item!.quantidade.toString() : '');
-    final TextEditingController precoControle = TextEditingController(
-        text: estaEditando ? item!.preco.toStringAsFixed(2).replaceAll('.', ',') : '');
+  Future<void> _mostrarModalItem({
+    required bool estaEditando, 
+    ItemComanda? item, 
+    int? index
+  }) async {
+    final itemControle = TextEditingController(
+      text: estaEditando ? item!.nome : ''
+    );
+    final quantidadeControle = TextEditingController(
+      text: estaEditando ? item!.quantidade.toString() : ''
+    );
+    final precoControle = TextEditingController(
+      text: estaEditando ? item!.preco.toStringAsFixed(2).replaceAll('.', ',') : ''
+    );
     File? imagemSelecionada;
 
-    if (estaEditando && item!.caminhoFoto != null) {
+    if (estaEditando && item!.caminhoFoto != null && item.caminhoFoto!.isNotEmpty) {
       imagemSelecionada = File(item.caminhoFoto!);
     }
 
-    showDialog(
+    final result = await showDialog<ItemComanda>(
       context: context,
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             Future<void> selecionarFoto() async {
-              final ImagePicker seletorImagem = ImagePicker();
-              final XFile? imagem = await seletorImagem.pickImage(source: ImageSource.gallery);
+              final imagem = await ImagePicker().pickImage(source: ImageSource.gallery);
               if (imagem != null) {
                 setModalState(() {
                   imagemSelecionada = File(imagem.path);
@@ -247,21 +235,22 @@ class _TelaEditarComandaState extends State<TelaEditarComanda> {
                     Center(
                       child: Column(
                         children: [
-                          imagemSelecionada != null
-                              ? Image.file(
-                                  imagemSelecionada!,
-                                  key: ValueKey(imagemSelecionada!.path),
-                                  width: 100,
-                                  height: 100,
-                                  fit: BoxFit.cover,
-                                )
-                              : Container(
-                                  key: const ValueKey('no_image_placeholder'),
-                                  width: 100,
-                                  height: 100,
-                                  color: Colors.grey[200],
-                                  child: Icon(Icons.image, size: 50, color: Colors.grey[400]),
-                                ),
+                          if (imagemSelecionada != null)
+                            Image.file(
+                              imagemSelecionada!,
+                              key: ValueKey(imagemSelecionada!.path), 
+                              width: 100,
+                              height: 100,
+                              fit: BoxFit.cover,
+                            )
+                          else
+                            Container(
+                              key: const ValueKey('no_image_placeholder'), 
+                              width: 100,
+                              height: 100,
+                              color: Colors.grey[200],
+                              child: Icon(Icons.image, size: 50, color: Colors.grey[400]),
+                            ),
                           TextButton.icon(
                             icon: const Icon(Icons.photo_library),
                             label: const Text('Selecionar Foto'),
@@ -286,28 +275,34 @@ class _TelaEditarComandaState extends State<TelaEditarComanda> {
               actions: <Widget>[
                 TextButton(
                   child: const Text('Cancelar'),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
                 ElevatedButton(
                   child: Text(estaEditando ? 'Salvar Alterações' : 'Adicionar'),
                   onPressed: () {
-                    final String nomeItem = itemControle.text.trim();
-                    final int? quantidade = int.tryParse(quantidadeControle.text.trim());
-                    final double? preco = double.tryParse(precoControle.text.replaceAll(',', '.').trim());
+                    final nomeItem = itemControle.text.trim();
+                    final quantidade = int.tryParse(quantidadeControle.text.trim());
+                    final preco = double.tryParse(precoControle.text.replaceAll(',', '.').trim());
 
                     if (!_validarItem(nomeItem, quantidade, preco)) {
-                      _mostrarMensagemErro('Preencha todos os campos corretamente (quantidade > 0, preço >= 0).');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Preencha todos os campos corretamente'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
                       return;
                     }
 
-                    if (estaEditando) {
-                      _editarItem(index!, nomeItem, quantidade!, preco!, imagemSelecionada?.path);
-                    } else {
-                      _adicionarItem(nomeItem, quantidade!, preco!, imagemSelecionada?.path);
-                    }
-                    Navigator.of(context).pop();
+                    Navigator.of(context).pop(
+                      ItemComanda(
+                        id: estaEditando ? item!.id : null,
+                        nome: nomeItem,
+                        quantidade: quantidade!,
+                        preco: preco!,
+                        caminhoFoto: imagemSelecionada?.path,
+                      ),
+                    );
                   },
                 ),
               ],
@@ -315,15 +310,34 @@ class _TelaEditarComandaState extends State<TelaEditarComanda> {
           },
         );
       },
-    ).then((_) {
-      itemControle.dispose();
-      quantidadeControle.dispose();
-      precoControle.dispose();
-    });
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        if (estaEditando && index != null) {
+          _comandaSendoEditada.itens[index] = result;
+        } else {
+          _comandaSendoEditada.itens.add(result);
+        }
+        _calcularTotal();
+        _checarMudancas();
+      });
+    }
+    
+    itemControle.dispose();
+    quantidadeControle.dispose();
+    precoControle.dispose();
   }
 
-  double get _total {
-    return _comandaSendoEditada.itens.fold(0.0, (soma, item) => soma + item.total);
+  void _calcularTotal() {
+    if (!mounted) return;
+    
+    setState(() {
+      _total = _comandaSendoEditada.itens.fold(
+        0.0, 
+        (soma, item) => soma + (item.preco * item.quantidade)
+      );
+    });
   }
 
   @override
@@ -331,9 +345,44 @@ class _TelaEditarComandaState extends State<TelaEditarComanda> {
     return PopScope(
       canPop: true,
       onPopInvoked: (didPop) async {
-        if (didPop) {
-          if (_temMudancas) {
-            await _salvarComanda();
+        if (didPop) return;
+        
+        if (_temMudancas) {
+          final shouldPop = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Salvar alterações?'),
+              content: const Text('Existem alterações não salvas. Deseja salvar antes de sair?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Sair sem salvar'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final saved = await _salvarComanda();
+                    Navigator.of(context).pop(saved);
+                  },
+                  child: const Text('Salvar e sair'),
+                ),
+              ],
+            ),
+          );
+
+          if (shouldPop ?? false) {
+            if (mounted) {
+              widget.aoSalvar();
+              Navigator.of(context).pop();
+            }
+          }
+        } else {
+          if (mounted) {
+            widget.aoSalvar();
+            Navigator.of(context).pop();
           }
         }
       },
@@ -344,9 +393,14 @@ class _TelaEditarComandaState extends State<TelaEditarComanda> {
             IconButton(
               icon: const Icon(Icons.save),
               onPressed: _estaCarregando ? null : () async {
+                setState(() => _estaCarregando = true);
                 final salvo = await _salvarComanda();
-                if (salvo) {
-                  Navigator.pop(context);
+                if (mounted) {
+                  setState(() => _estaCarregando = false);
+                  if (salvo) {
+                    Navigator.pop(context);
+                    widget.aoSalvar();
+                  }
                 }
               },
               tooltip: 'Salvar Alterações',
@@ -385,11 +439,27 @@ class _TelaEditarComandaState extends State<TelaEditarComanda> {
                       itemCount: _comandaSendoEditada.itens.length,
                       itemBuilder: (context, index) {
                         final itemAtual = _comandaSendoEditada.itens[index];
-                        return CardItemComanda(
-                          key: ValueKey(itemAtual.id),
-                          item: itemAtual,
-                          aoRemover: () => _removerItem(index),
-                          aoTocar: () => _mostrarModalEditarItem(itemAtual, index),
+                        return Card(
+                          child: ListTile(
+                            title: Text(itemAtual.nome),
+                            subtitle: Text(
+                              '${itemAtual.quantidade}x R\$${itemAtual.preco.toStringAsFixed(2)}',
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: Colors.blue),
+                                  onPressed: () => _mostrarModalEditarItem(itemAtual, index),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () => _removerItem(index),
+                                ),
+                              ],
+                            ),
+                            onTap: () => _mostrarModalEditarItem(itemAtual, index),
+                          ),
                         );
                       },
                     ),

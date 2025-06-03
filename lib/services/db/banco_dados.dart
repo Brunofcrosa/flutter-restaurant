@@ -1,4 +1,3 @@
-// lib/services/db/banco_dados.dart
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 

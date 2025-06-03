@@ -1,4 +1,3 @@
-// lib/modules/home/tela_inicial.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -9,7 +8,7 @@ import '../../services/db/banco_dados.dart';
 import '../../services/db/modelo_comanda.dart';
 
 class TelaInicial extends StatefulWidget {
-  const TelaInicial({super.key});
+  const TelaInicial({super.key}); 
 
   @override
   _TelaInicialState createState() => _TelaInicialState();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'modules/home/tela_inicial.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MeuApp());
 }
 

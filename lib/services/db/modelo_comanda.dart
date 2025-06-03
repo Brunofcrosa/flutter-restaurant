@@ -1,8 +1,7 @@
-// lib/services/db/modelo_comanda.dart
-import 'package:uuid/uuid.dart';
+import 'package:uuid/uuid.dart'; 
 
 class ItemComanda {
-  final int? id;
+  final int? id; 
   final String nome;
   final int quantidade;
   final double preco;
@@ -30,7 +29,7 @@ class ItemComanda {
 
   factory ItemComanda.doMapa(Map<String, dynamic> mapa) {
     return ItemComanda(
-      id: mapa['id'] as int?,
+      id: mapa['id'] as int?, 
       nome: mapa['nome'] ?? '',
       quantidade: mapa['quantidade'] ?? 0,
       preco: (mapa['preco'] is int)
@@ -41,7 +40,7 @@ class ItemComanda {
   }
 
   ItemComanda copiarCom({
-    int? id,
+    int? id, 
     String? nome,
     int? quantidade,
     double? preco,

@@ -1,7 +1,5 @@
-import 'package:uuid/uuid.dart'; 
-
 class ItemComanda {
-  final int? id; 
+  final int? id;
   final String nome;
   final int quantidade;
   final double preco;
@@ -29,18 +27,19 @@ class ItemComanda {
 
   factory ItemComanda.doMapa(Map<String, dynamic> mapa) {
     return ItemComanda(
-      id: mapa['id'] as int?, 
+      id: mapa['id'] as int?,
       nome: mapa['nome'] ?? '',
       quantidade: mapa['quantidade'] ?? 0,
-      preco: (mapa['preco'] is int)
-          ? (mapa['preco'] as int).toDouble()
-          : (mapa['preco'] as double?) ?? 0.0,
+      preco:
+          (mapa['preco'] is int)
+              ? (mapa['preco'] as int).toDouble()
+              : (mapa['preco'] as double?) ?? 0.0,
       caminhoFoto: mapa['caminho_foto'] as String?,
     );
   }
 
   ItemComanda copiarCom({
-    int? id, 
+    int? id,
     String? nome,
     int? quantidade,
     double? preco,
@@ -72,8 +71,8 @@ class Comanda {
     required this.nome,
     DateTime? dataCriacao,
     List<ItemComanda>? itens,
-  })  : dataCriacao = dataCriacao ?? DateTime.now(),
-        itens = itens ?? [];
+  }) : dataCriacao = dataCriacao ?? DateTime.now(),
+       itens = itens ?? [];
 
   double get total {
     return itens.fold(0.0, (soma, item) => soma + item.total);

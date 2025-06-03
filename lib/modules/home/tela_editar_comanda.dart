@@ -1,503 +1,295 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:restaurante/services/db/banco_dados.dart';
-import 'package:restaurante/services/db/modelo_comanda.dart';
-import 'package:uuid/uuid.dart';
+import '../../services/db/banco_dados.dart';
+import '../../services/db/modelo_comanda.dart';
+import '../../app/ui/utils/utilitarios_app.dart'; // Importa a função utilitária para mensagens
 
 class TelaEditarComanda extends StatefulWidget {
   final Comanda comanda;
   final VoidCallback aoSalvar;
 
   const TelaEditarComanda({
-    super.key, 
+    super.key,
     required this.comanda,
     required this.aoSalvar,
   });
 
   @override
-  State<TelaEditarComanda> createState() => _TelaEditarComandaState();
+  _TelaEditarComandaState createState() => _TelaEditarComandaState();
 }
 
 class _TelaEditarComandaState extends State<TelaEditarComanda> {
-  late Comanda _comandaSendoEditada;
-  final TextEditingController _nomeControle = TextEditingController();
+  late Comanda _comandaEmEdicao;
+  final TextEditingController _nomeComandaControle = TextEditingController();
   final BancoDados _banco = BancoDados();
   bool _estaCarregando = false;
-  bool _temMudancas = false;
-  double _total = 0.0;
-  bool _isSaving = false;
+
+  // Controladores para adicionar novo item
+  final TextEditingController _nomeItemControle = TextEditingController();
+  final TextEditingController _quantidadeItemControle = TextEditingController();
+  final TextEditingController _precoItemControle = TextEditingController();
+  final TextEditingController _caminhoFotoItemControle =
+      TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _comandaSendoEditada = widget.comanda.copiarCom();
-    _nomeControle.text = _comandaSendoEditada.nome;
-    _calcularTotal();
-    _nomeControle.addListener(_checarMudancas);
+    _comandaEmEdicao = widget.comanda.copiarCom(); // Cria uma cópia para edição
+    _nomeComandaControle.text = _comandaEmEdicao.nome;
   }
 
   @override
   void dispose() {
-    _nomeControle.removeListener(_checarMudancas);
-    _nomeControle.dispose();
+    _nomeComandaControle.dispose();
+    _nomeItemControle.dispose();
+    _quantidadeItemControle.dispose();
+    _precoItemControle.dispose();
+    _caminhoFotoItemControle.dispose();
     super.dispose();
   }
 
-  void _checarMudancas() {
-    if (!mounted) return;
-    
-    final bool nomeMudou = _nomeControle.text.trim() != widget.comanda.nome;
-    final bool itensMudaram = !_compararItens(
-      _comandaSendoEditada.itens, 
-      widget.comanda.itens
-    );
+  /// Salva as alterações da comanda e seus itens no banco de dados.
+  Future<void> _salvarComanda() async {
+    if (_estaCarregando || !mounted) return;
 
-    setState(() {
-      _temMudancas = nomeMudou || itensMudaram;
-    });
-  }
+    final String nome = _nomeComandaControle.text.trim();
 
-  void _mostrarMensagemErro(String mensagem) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(mensagem),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  bool _validarItem(String nome, int? quantidade, double? preco) {
-    return nome.isNotEmpty &&
-        quantidade != null &&
-        quantidade > 0 &&
-        preco != null &&
-        preco >= 0;
-  }
-
-  void _removerItem(int index) {
-    if (!mounted) return;
-    
-    setState(() {
-      final novosItens = List<ItemComanda>.from(_comandaSendoEditada.itens);
-      novosItens.removeAt(index);
-      _comandaSendoEditada = _comandaSendoEditada.copiarCom(
-        itens: novosItens,
-      );
-      _calcularTotal();
-      _checarMudancas();
-    });
-  }
-
-  bool _compararItens(List<ItemComanda> lista1, List<ItemComanda> lista2) {
-    if (lista1.length != lista2.length) return false;
-    for (int i = 0; i < lista1.length; i++) {
-      if (lista1[i].id != lista2[i].id ||
-          lista1[i].nome != lista2[i].nome ||
-          lista1[i].quantidade != lista2[i].quantidade ||
-          lista1[i].preco != lista2[i].preco ||
-          lista1[i].caminhoFoto != lista2[i].caminhoFoto) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  Future<bool> _salvarComanda() async {
-    if (_isSaving || !mounted) return false;
-    _isSaving = true;
-
-    final String nome = _nomeControle.text.trim();
     if (nome.isEmpty) {
-      _mostrarMensagemErro('O nome da comanda não pode ser vazio.');
-      _isSaving = false;
-      return false;
-    }
-
-    if (!_temMudancas) {
-      _isSaving = false;
-      return true;
+      mostrarMensagem(
+        context,
+        'O nome da comanda não pode ser vazio.',
+        isError: true,
+      );
+      return;
     }
 
     setState(() => _estaCarregando = true);
 
     try {
-      await _banco.atualizarComanda(_comandaSendoEditada.copiarCom(
-        nome: nome,
-        itens: _comandaSendoEditada.itens.map((e) => e.copiarCom()).toList(),
-      ));
+      // Atualiza o nome da comanda em edição
+      _comandaEmEdicao = _comandaEmEdicao.copiarCom(nome: nome);
 
-      if (!mounted) return false;
+      await _banco.atualizarComanda(_comandaEmEdicao);
 
-      setState(() {
-        _comandaSendoEditada = _comandaSendoEditada.copiarCom(
-          nome: nome,
-          itens: _comandaSendoEditada.itens.map((e) => e.copiarCom()).toList(),
-        );
-        _temMudancas = false;
-      });
-      
-      return true;
+      if (!mounted) return;
+
+      widget.aoSalvar(); // Notifica a tela anterior para recarregar
+      Navigator.of(context).pop(); // Volta para a tela anterior
+      mostrarMensagem(context, 'Comanda atualizada com sucesso!');
     } catch (e) {
-      if (mounted) {
-        _mostrarMensagemErro('Erro ao salvar comanda: $e');
-      }
-      return false;
+      mostrarMensagem(context, 'Erro ao atualizar comanda: $e', isError: true);
     } finally {
       if (mounted) {
         setState(() => _estaCarregando = false);
       }
-      _isSaving = false;
     }
   }
 
-  void _mostrarModalAdicionarItem() {
-    _mostrarModalItem(estaEditando: false);
-  }
+  /// Adiciona um novo item à comanda.
+  void _adicionarItem() {
+    final String nome = _nomeItemControle.text.trim();
+    final int? quantidade = int.tryParse(_quantidadeItemControle.text.trim());
+    final double? preco = double.tryParse(_precoItemControle.text.trim());
+    final String? caminhoFoto =
+        _caminhoFotoItemControle.text.trim().isEmpty
+            ? null
+            : _caminhoFotoItemControle.text.trim();
 
-  void _mostrarModalEditarItem(ItemComanda item, int index) {
-    _mostrarModalItem(estaEditando: true, item: item, index: index);
-  }
-
-  Future<void> _mostrarModalItem({
-    required bool estaEditando, 
-    ItemComanda? item, 
-    int? index
-  }) async {
-    final itemControle = TextEditingController(
-      text: estaEditando ? item!.nome : ''
-    );
-    final quantidadeControle = TextEditingController(
-      text: estaEditando ? item!.quantidade.toString() : ''
-    );
-    final precoControle = TextEditingController(
-      text: estaEditando ? item!.preco.toStringAsFixed(2).replaceAll('.', ',') : ''
-    );
-    File? imagemSelecionada;
-
-    if (estaEditando && item!.caminhoFoto != null && item.caminhoFoto!.isNotEmpty) {
-      imagemSelecionada = File(item.caminhoFoto!);
-    }
-
-    final result = await showDialog<ItemComanda>(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            Future<void> selecionarFoto() async {
-              final imagem = await ImagePicker().pickImage(source: ImageSource.gallery);
-              if (imagem != null) {
-                setModalState(() {
-                  imagemSelecionada = File(imagem.path);
-                });
-              }
-            }
-
-            return AlertDialog(
-              title: Text(estaEditando ? 'Editar Item' : 'Adicionar Novo Item'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: itemControle,
-                      decoration: const InputDecoration(
-                        labelText: 'Nome do Item',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: quantidadeControle,
-                      decoration: const InputDecoration(
-                        labelText: 'Quantidade',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: precoControle,
-                      decoration: const InputDecoration(
-                        labelText: 'Preço (R\$)',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^\d+[,.]?\d{0,2}')),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Center(
-                      child: Column(
-                        children: [
-                          if (imagemSelecionada != null)
-                            Image.file(
-                              imagemSelecionada!,
-                              key: ValueKey(imagemSelecionada!.path), 
-                              width: 100,
-                              height: 100,
-                              fit: BoxFit.cover,
-                            )
-                          else
-                            Container(
-                              key: const ValueKey('no_image_placeholder'), 
-                              width: 100,
-                              height: 100,
-                              color: Colors.grey[200],
-                              child: Icon(Icons.image, size: 50, color: Colors.grey[400]),
-                            ),
-                          TextButton.icon(
-                            icon: const Icon(Icons.photo_library),
-                            label: const Text('Selecionar Foto'),
-                            onPressed: selecionarFoto,
-                          ),
-                          if (imagemSelecionada != null)
-                            TextButton.icon(
-                              icon: const Icon(Icons.clear, color: Colors.red),
-                              label: const Text('Remover Foto'),
-                              onPressed: () {
-                                setModalState(() {
-                                  imagemSelecionada = null;
-                                });
-                              },
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  child: const Text('Cancelar'),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                ElevatedButton(
-                  child: Text(estaEditando ? 'Salvar Alterações' : 'Adicionar'),
-                  onPressed: () {
-                    final nomeItem = itemControle.text.trim();
-                    final quantidade = int.tryParse(quantidadeControle.text.trim());
-                    final preco = double.tryParse(precoControle.text.replaceAll(',', '.').trim());
-
-                    if (!_validarItem(nomeItem, quantidade, preco)) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Preencha todos os campos corretamente'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
-
-                    Navigator.of(context).pop(
-                      ItemComanda(
-                        id: estaEditando ? item!.id : null,
-                        nome: nomeItem,
-                        quantidade: quantidade!,
-                        preco: preco!,
-                        caminhoFoto: imagemSelecionada?.path,
-                      ),
-                    );
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (result != null && mounted) {
-      setState(() {
-        if (estaEditando && index != null) {
-          _comandaSendoEditada.itens[index] = result;
-        } else {
-          _comandaSendoEditada.itens.add(result);
-        }
-        _calcularTotal();
-        _checarMudancas();
-      });
-    }
-    
-    itemControle.dispose();
-    quantidadeControle.dispose();
-    precoControle.dispose();
-  }
-
-  void _calcularTotal() {
-    if (!mounted) return;
-    
-    setState(() {
-      _total = _comandaSendoEditada.itens.fold(
-        0.0, 
-        (soma, item) => soma + (item.preco * item.quantidade)
+    if (nome.isEmpty ||
+        quantidade == null ||
+        quantidade <= 0 ||
+        preco == null ||
+        preco <= 0) {
+      mostrarMensagem(
+        context,
+        'Por favor, preencha nome, quantidade e preço válidos para o item.',
+        isError: true,
       );
+      return;
+    }
+
+    setState(() {
+      _comandaEmEdicao.itens.add(
+        ItemComanda(
+          nome: nome,
+          quantidade: quantidade,
+          preco: preco,
+          caminhoFoto: caminhoFoto,
+        ),
+      );
+      // Limpa os campos do formulário de item
+      _nomeItemControle.clear();
+      _quantidadeItemControle.clear();
+      _precoItemControle.clear();
+      _caminhoFotoItemControle.clear();
     });
+    mostrarMensagem(
+      context,
+      'Item adicionado temporariamente. Salve a comanda para persistir.',
+    );
+  }
+
+  /// Remove um item da comanda.
+  void _removerItem(int index) {
+    setState(() {
+      _comandaEmEdicao.itens.removeAt(index);
+    });
+    mostrarMensagem(
+      context,
+      'Item removido temporariamente. Salve a comanda para persistir.',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: true,
-      onPopInvoked: (didPop) async {
-        if (didPop) return;
-        
-        if (_temMudancas) {
-          final shouldPop = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Salvar alterações?'),
-              content: const Text('Existem alterações não salvas. Deseja salvar antes de sair?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancelar'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Sair sem salvar'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    final saved = await _salvarComanda();
-                    Navigator.of(context).pop(saved);
-                  },
-                  child: const Text('Salvar e sair'),
-                ),
-              ],
-            ),
-          );
-
-          if (shouldPop ?? false) {
-            if (mounted) {
-              widget.aoSalvar();
-              Navigator.of(context).pop();
-            }
-          }
-        } else {
-          if (mounted) {
-            widget.aoSalvar();
-            Navigator.of(context).pop();
-          }
-        }
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Editar Comanda'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.save),
-              onPressed: _estaCarregando ? null : () async {
-                setState(() => _estaCarregando = true);
-                final salvo = await _salvarComanda();
-                if (mounted) {
-                  setState(() => _estaCarregando = false);
-                  if (salvo) {
-                    Navigator.pop(context);
-                    widget.aoSalvar();
-                  }
-                }
-              },
-              tooltip: 'Salvar Alterações',
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: TextField(
-                controller: _nomeControle,
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Editar Comanda'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.save),
+            onPressed: _estaCarregando ? null : _salvarComanda,
+            tooltip: 'Salvar Comanda',
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _nomeComandaControle,
                 decoration: const InputDecoration(
                   labelText: 'Nome da Comanda',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.receipt_long),
                 ),
                 onChanged: (valor) {
-                  setState(() {
-                    _comandaSendoEditada = _comandaSendoEditada.copiarCom(nome: valor);
-                    _checarMudancas();
-                  });
+                  // O nome será pego do controlador no momento de salvar,
+                  // não é necessário atualizar o estado da comanda aqui.
                 },
               ),
-            ),
-            Expanded(
-              child: _comandaSendoEditada.itens.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'Nenhum item adicionado ainda.\nClique no botão "+" para adicionar itens.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 16, color: Colors.grey),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: _comandaSendoEditada.itens.length,
-                      itemBuilder: (context, index) {
-                        final itemAtual = _comandaSendoEditada.itens[index];
-                        return Card(
-                          child: ListTile(
-                            title: Text(itemAtual.nome),
-                            subtitle: Text(
-                              '${itemAtual.quantidade}x R\$${itemAtual.preco.toStringAsFixed(2)}',
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.blue),
-                                  onPressed: () => _mostrarModalEditarItem(itemAtual, index),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _removerItem(index),
-                                ),
-                              ],
-                            ),
-                            onTap: () => _mostrarModalEditarItem(itemAtual, index),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(16.0),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                border: Border(
-                  top: BorderSide(color: Colors.grey.shade300, width: 1.0),
+              const SizedBox(height: 20),
+              Text(
+                'Itens da Comanda (Total: R\$${_comandaEmEdicao.total.toStringAsFixed(2)})',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Total da Comanda:',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              const SizedBox(height: 10),
+              // Lista de itens da comanda
+              _comandaEmEdicao.itens.isEmpty
+                  ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 10.0),
+                    child: Text('Nenhum item adicionado ainda.'),
+                  )
+                  : ListView.builder(
+                    shrinkWrap:
+                        true, // Importante para ListView dentro de SingleChildScrollView
+                    physics:
+                        const NeverScrollableScrollPhysics(), // Desabilita o scroll da lista
+                    itemCount: _comandaEmEdicao.itens.length,
+                    itemBuilder: (context, index) {
+                      final item = _comandaEmEdicao.itens[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4.0),
+                        elevation: 1,
+                        child: ListTile(
+                          title: Text('${item.nome} (x${item.quantidade})'),
+                          subtitle: Text(
+                            'R\$${item.preco.toStringAsFixed(2)} cada - Total: R\$${item.total.toStringAsFixed(2)}',
+                          ),
+                          leading:
+                              item.caminhoFoto != null &&
+                                      item.caminhoFoto!.isNotEmpty
+                                  ? CircleAvatar(
+                                    backgroundImage: NetworkImage(
+                                      item.caminhoFoto!,
+                                    ),
+                                    onBackgroundImageError: (
+                                      exception,
+                                      stackTrace,
+                                    ) {
+                                      // Fallback para imagem de placeholder em caso de erro
+                                      mostrarMensagem(
+                                        context,
+                                        'Erro ao carregar imagem para ${item.nome}',
+                                        isError: true,
+                                      );
+                                    },
+                                  )
+                                  : const CircleAvatar(
+                                    child: Icon(Icons.fastfood),
+                                  ),
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.remove_circle,
+                              color: Colors.red,
+                            ),
+                            onPressed: () => _removerItem(index),
+                            tooltip: 'Remover Item',
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                  Text(
-                    'R\$${_total.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 20),
+              const Text(
+                'Adicionar Novo Item:',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-            ),
-            if (_estaCarregando)
-              const LinearProgressIndicator(),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: _mostrarModalAdicionarItem,
-          tooltip: 'Adicionar Item',
-          child: const Icon(Icons.add),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _nomeItemControle,
+                decoration: const InputDecoration(
+                  labelText: 'Nome do Item',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _quantidadeItemControle,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Quantidade',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _precoItemControle,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Preço Unitário',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _caminhoFotoItemControle,
+                decoration: const InputDecoration(
+                  labelText: 'Caminho da Foto (URL opcional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _adicionarItem,
+                  icon: const Icon(Icons.add_shopping_cart),
+                  label: const Text('Adicionar Item'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    textStyle: const TextStyle(fontSize: 18),
+                  ),
+                ),
+              ),
+              if (_estaCarregando) const LinearProgressIndicator(),
+            ],
+          ),
         ),
       ),
     );

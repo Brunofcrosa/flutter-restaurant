@@ -1,99 +1,98 @@
 import 'package:flutter/material.dart';
 import '../../services/db/banco_dados.dart';
 import '../../services/db/modelo_comanda.dart';
+import '../../app/ui/utils/utilitarios_app.dart'; // Importa a função utilitária para mensagens
 
 class TelaNovaComanda extends StatefulWidget {
   final VoidCallback aoSalvar;
 
-  const TelaNovaComanda({super.key, required this.aoSalvar}); 
+  const TelaNovaComanda({super.key, required this.aoSalvar});
 
   @override
   _TelaNovaComandaState createState() => _TelaNovaComandaState();
 }
 
 class _TelaNovaComandaState extends State<TelaNovaComanda> {
-  late Comanda _novaComanda;
   final TextEditingController _nomeControle = TextEditingController();
   final BancoDados _banco = BancoDados();
-  bool _estaCarregando = false;
-  bool _isSaving = false;
+  bool _estaCarregando = false; // Controla o estado de carregamento
 
   @override
   void initState() {
     super.initState();
-    _novaComanda = Comanda(id: null, nome: 'Nova Comanda');
-    _nomeControle.text = _novaComanda.nome;
+    // Você pode iniciar o campo de texto com um valor padrão, se desejar.
+    // _nomeControle.text = 'Nova Comanda';
   }
 
   @override
   void dispose() {
-    _nomeControle.dispose();
+    _nomeControle
+        .dispose(); // Libera o controlador quando o widget é descartado
     super.dispose();
   }
 
-  void _mostrarErro(String mensagem) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(mensagem),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  void _mostrarMensagem(String mensagem) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(mensagem), 
-          backgroundColor: Colors.green
-        ),
-      );
-    }
-  }
-
+  /// Tenta salvar a nova comanda no banco de dados.
   Future<void> _salvarComanda() async {
-    if (_isSaving || !mounted) return;
-    _isSaving = true;
-    
-    final String nome = _nomeControle.text.trim();
+    // Impede múltiplas chamadas enquanto já está carregando ou se o widget não está montado.
+    if (_estaCarregando || !mounted) return;
 
+    final String nome =
+        _nomeControle.text.trim(); // Obtém o nome e remove espaços extras.
+
+    // Validação: o nome da comanda não pode ser vazio.
     if (nome.isEmpty) {
-      _mostrarErro('O nome da comanda não pode ser vazio.');
-      _isSaving = false;
+      mostrarMensagem(
+        context,
+        'O nome da comanda não pode ser vazio.',
+        isError: true,
+      ); // Passa o context
       return;
     }
 
+    // Define o estado de carregamento para true para exibir um indicador e desabilitar o botão.
     setState(() => _estaCarregando = true);
 
     try {
-      await _banco.salvarComanda(_novaComanda.copiarCom(
-        id: null, 
-        nome: nome, 
-        itens: []
-      ));
+      // Cria uma nova instância de Comanda com o nome digitado.
+      // O 'id' é null para que o banco de dados atribua um novo.
+      // 'itens' é uma lista vazia, pois uma nova comanda não tem itens inicialmente.
+      final novaComandaParaSalvar = Comanda(
+        nome: nome,
+        itens: [], // Nova comanda começa sem itens
+      );
 
+      // Salva a comanda no banco de dados.
+      await _banco.salvarComanda(novaComandaParaSalvar);
+
+      // Verifica novamente se o widget está montado antes de continuar após a operação assíncrona.
       if (!mounted) return;
-      
+
+      // Chama o callback para notificar a tela anterior que a comanda foi salva.
       widget.aoSalvar();
 
+      // Agenda a navegação e a mensagem para depois que o frame atual for construído.
+      // Isso evita problemas se o contexto for alterado rapidamente.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          Navigator.of(context).pop();
-          _mostrarMensagem('Comanda salva com sucesso!');
+          Navigator.of(context).pop(); // Fecha a tela atual
+          mostrarMensagem(
+            context,
+            'Comanda salva com sucesso!',
+          ); // Passa o context
         }
       });
-
     } catch (e) {
-      if (mounted) {
-        _mostrarErro('Erro ao salvar comanda: $e');
-      }
+      // Em caso de erro, exibe uma mensagem.
+      mostrarMensagem(
+        context,
+        'Erro ao salvar comanda: $e',
+        isError: true,
+      ); // Passa o context
     } finally {
+      // Garante que o estado de carregamento seja redefinido para false, mesmo em caso de erro.
       if (mounted) {
         setState(() => _estaCarregando = false);
       }
-      _isSaving = false;
     }
   }
 
@@ -105,8 +104,9 @@ class _TelaNovaComandaState extends State<TelaNovaComanda> {
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
+            // Desabilita o botão se estiver carregando para evitar cliques múltiplos.
             onPressed: _estaCarregando ? null : _salvarComanda,
-            tooltip: 'Salvar Comanda',
+            tooltip: _estaCarregando ? 'Salvando...' : 'Salvar Comanda',
           ),
         ],
       ),
@@ -115,22 +115,20 @@ class _TelaNovaComandaState extends State<TelaNovaComanda> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: TextField(
-              controller: _nomeControle,
+              controller: _nomeControle, // Controla o texto do campo
               decoration: const InputDecoration(
                 labelText: 'Nome da Comanda',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.receipt_long),
               ),
-              onChanged: (valor) {
-                setState(() {
-                  _novaComanda = _novaComanda.copiarCom(nome: valor);
-                });
-              },
+              // Não é necessário chamar setState aqui, pois o nome é pego do _nomeControle.text
+              // diretamente no _salvarComanda().
+              // onChanged: (valor) { /* Sem necessidade de setState aqui */ },
             ),
           ),
-          const Spacer(),
-          if (_estaCarregando)
-            const LinearProgressIndicator(),
+          const Spacer(), // Ocupa o espaço restante
+          // Exibe um indicador de progresso linear quando estiver carregando.
+          if (_estaCarregando) const LinearProgressIndicator(),
         ],
       ),
     );

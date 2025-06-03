@@ -91,14 +91,6 @@ class _TelaAdicionarItemState extends State<TelaAdicionarItem> {
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 15),
-            TextField(
-              controller: _caminhoFotoItemControle,
-              decoration: const InputDecoration(
-                labelText: 'Caminho da Foto (URL opcional)',
-                border: OutlineInputBorder(),
-              ),
-            ),
             const SizedBox(height: 30),
             ElevatedButton.icon(
               onPressed: _salvarItem,

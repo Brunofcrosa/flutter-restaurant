@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Para formatação de datas
-import 'package:restaurante/modules/home/tela_editar_comanda.dart'; // Importa a tela de edição
-import 'package:restaurante/modules/home/tela_nova_comanda.dart'; // Importa a tela de nova comanda
-import '../../services/db/banco_dados.dart'; // Importa o serviço de banco de dados
-import '../../services/db/modelo_comanda.dart'; // Importa os modelos de dados
-import '../../app/ui/utils/utilitarios_app.dart'; // Importa a função utilitária para mensagens
+import 'package:intl/intl.dart';
+import 'package:restaurante/modules/home/tela_editar_comanda.dart';
+import 'package:restaurante/modules/home/tela_nova_comanda.dart';
+import '../../services/db/banco_dados.dart';
+import '../../services/db/modelo_comanda.dart';
+import '../../app/ui/utils/utilitarios_app.dart';
 
 class TelaInicial extends StatefulWidget {
   const TelaInicial({super.key});
@@ -14,39 +14,26 @@ class TelaInicial extends StatefulWidget {
 }
 
 class _TelaInicialState extends State<TelaInicial> {
-  final BancoDados _banco =
-      BancoDados(); // Instância do serviço de banco de dados
-  List<Comanda> _comandas = []; // Lista de comandas a ser exibida
+  final BancoDados _banco = BancoDados();
+  List<Comanda> _comandas = [];
 
   @override
   void initState() {
     super.initState();
-    _carregarComandas(); // Carrega as comandas ao inicializar a tela
+    _carregarComandas();
   }
 
-  /// Carrega a lista de comandas do banco de dados.
   Future<void> _carregarComandas() async {
     try {
-      final comandas = await _banco.listarComandas(); // Busca as comandas
-      // Verifica se o widget ainda está montado antes de atualizar o estado.
+      final comandas = await _banco.listarComandas();
       if (mounted) {
-        setState(
-          () => _comandas = comandas,
-        ); // Atualiza a lista de comandas no estado
+        setState(() => _comandas = comandas);
       }
     } catch (e) {
-      // Em caso de erro, exibe uma mensagem usando a função utilitária.
-      mostrarMensagem(
-        context,
-        'Erro ao carregar comandas: $e',
-        isError: true,
-      ); // Passa o context
+      mostrarMensagem(context, 'Erro ao carregar comandas: $e', isError: true);
     }
   }
 
-  /// Abre a tela de edição de uma comanda existente.
-  ///
-  /// [comanda]: A comanda a ser editada.
   void _abrirComanda(Comanda comanda) {
     Navigator.push(
       context,
@@ -54,35 +41,22 @@ class _TelaInicialState extends State<TelaInicial> {
         builder:
             (context) => TelaEditarComanda(
               comanda: comanda,
-              aoSalvar:
-                  _carregarComandas, // Callback para recarregar as comandas após salvar
+              aoSalvar: _carregarComandas,
             ),
       ),
     );
   }
 
-  /// Remove uma comanda do banco de dados.
-  ///
-  /// [id]: O ID da comanda a ser removida.
   Future<void> _removerComanda(int id) async {
     try {
-      await _banco.removerComanda(id); // Remove a comanda do banco
-      await _carregarComandas(); // Recarrega a lista para refletir a remoção
-      mostrarMensagem(
-        context,
-        'Comanda removida com sucesso!',
-      ); // Passa o context
+      await _banco.removerComanda(id);
+      await _carregarComandas();
+      mostrarMensagem(context, 'Comanda removida com sucesso!');
     } catch (e) {
-      // Em caso de erro, exibe uma mensagem usando a função utilitária.
-      mostrarMensagem(
-        context,
-        'Erro ao remover comanda: $e',
-        isError: true,
-      ); // Passa o context
+      mostrarMensagem(context, 'Erro ao remover comanda: $e', isError: true);
     }
   }
 
-  /// Constrói o widget a ser exibido quando não há comandas.
   Widget _buildEmptyState() {
     return const Center(
       child: Text(
@@ -93,11 +67,7 @@ class _TelaInicialState extends State<TelaInicial> {
     );
   }
 
-  /// Constrói um item individual da lista de comandas.
-  ///
-  /// [comanda]: A comanda a ser exibida.
   Widget _buildComandaItem(Comanda comanda) {
-    // Formata a data de criação da comanda.
     final dataFormatada = DateFormat(
       'dd/MM/yyyy HH:mm',
     ).format(comanda.dataCriacao);
@@ -125,23 +95,21 @@ class _TelaInicialState extends State<TelaInicial> {
             ),
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed:
-                  () => _removerComanda(comanda.id!), // O ID não será nulo aqui
+              onPressed: () => _removerComanda(comanda.id!),
               tooltip: 'Remover Comanda',
             ),
           ],
         ),
-        onTap: () => _abrirComanda(comanda), // Abre a comanda ao tocar no item
+        onTap: () => _abrirComanda(comanda),
       ),
     );
   }
 
-  /// Constrói o botão para adicionar uma nova comanda.
   Widget _buildNewComandaButton() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: SizedBox(
-        width: double.infinity, // Ocupa a largura máxima disponível
+        width: double.infinity,
         child: ElevatedButton.icon(
           onPressed:
               () => Navigator.push(
@@ -171,16 +139,15 @@ class _TelaInicialState extends State<TelaInicial> {
           Expanded(
             child:
                 _comandas.isEmpty
-                    ? _buildEmptyState() // Exibe estado vazio se não houver comandas
+                    ? _buildEmptyState()
                     : ListView.builder(
                       itemCount: _comandas.length,
                       itemBuilder:
-                          (context, index) => _buildComandaItem(
-                            _comandas[index],
-                          ), // Constrói cada item da lista
+                          (context, index) =>
+                              _buildComandaItem(_comandas[index]),
                     ),
           ),
-          _buildNewComandaButton(), // Botão para adicionar nova comanda
+          _buildNewComandaButton(),
         ],
       ),
     );
